@@ -73,6 +73,7 @@ class YOLOv8:
         self.server = SimpleActionServer('/object_detector/yolov8', GenericImgProcAnnotatorAction, self.service_call, False)
 
         self.server.start()
+        print("Server started, waiting for requests...")
 
     def service_call(self, goal):
         rgb = goal.rgb

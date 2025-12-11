@@ -6,9 +6,9 @@ RUN apt-get update && apt-get install -y \
 	python3-opencv ca-certificates python3-dev git wget sudo ninja-build
 RUN ln -sv /usr/bin/python3 /usr/bin/python
 
-RUN wget https://bootstrap.pypa.io/get-pip.py && \
-	python3 get-pip.py && \
-	rm get-pip.py
+RUN wget https://bootstrap.pypa.io/pip/3.8/get-pip.py && \
+   python3 get-pip.py && \
+   rm get-pip.py
 
 # install lsb-release and curl
 RUN apt-get update \
@@ -62,7 +62,7 @@ RUN /bin/bash -c '. /opt/ros/noetic/setup.bash; cd /root/catkin_ws; catkin build
 
 # install yolov5 requirements
 COPY requirements.txt .
-RUN pip install -r requirements.txt
+RUN pip install -r requirements.txt --user
 # something breaks here, so we need to reinstall importlib_metadata
 RUN pip uninstall importlib_metadata -y && pip install importlib_metadata --force-reinstall
 RUN python3 -m pip install \
