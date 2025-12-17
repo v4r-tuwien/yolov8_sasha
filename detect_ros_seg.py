@@ -19,7 +19,7 @@ if str(ROOT) not in sys.path:
     sys.path.append(str(ROOT))  # add ROOT to PATH
 ROOT = Path(os.path.relpath(ROOT, Path.cwd()))  # relative
 
-names_mapping = {
+names_mapping_ycb_ichores = {
     "001_chips_can": "obj_000001",
     "002_master_chef_can": "obj_000002",
     "003_cracker_box": "obj_000003",
@@ -40,6 +40,10 @@ names_mapping = {
     "024_bowl": "obj_000018",
     "025_mug": "obj_000019",
     "029_plate": "obj_000020"
+}
+
+names_mapping_tracebotcanister = {
+    "fluidcontainer": "obj_000001",
 }
 
 class YOLOv8:
@@ -63,6 +67,7 @@ class YOLOv8:
 
         self.model = YOLO(weights)  # load a custom model
         self.is_ycb_ichores = ("ichores" in str(weights))
+        self.is_tracebotcanister = ("tracebotcanister" in str(weights))
 
         print("\n\n\n")
         print(weights, device, data, camera_topic)
@@ -101,10 +106,16 @@ class YOLOv8:
         cls = results[0].boxes.cls.cpu().detach().numpy()
 
         if len(cls):
-            boxes = results[0].boxes.xyxy.cpu().detach().numpy()
-            masks = results[0].masks.data.cpu().detach().numpy()
 
-            conf = results[0].boxes.conf.cpu().detach().numpy()
+            # Get box
+            if results[0].boxes is not None:
+                boxes = results[0].boxes.xyxy.cpu().detach().numpy()
+                conf = results[0].boxes.conf.cpu().detach().numpy()
+
+            if results[0].masks is not None:
+                masks = results[0].masks.data.cpu().detach().numpy()
+
+            
             names = results[0].names
             bboxes = []
             class_names = []
@@ -112,39 +123,44 @@ class YOLOv8:
             label_image = np.full((height, width), -1, np.int16)
             for idx in range(len(cls)):
                 if self.is_ycb_ichores:
-                    class_names.append(names_mapping[names[cls[idx]]])
+                    class_names.append(names_mapping_ycb_ichores[names[cls[idx]]])
+                elif self.is_tracebotcanister:
+                    class_names.append(names_mapping_tracebotcanister[names[cls[idx]]])
                 else:
                     class_names.append(names[cls[idx]])
                 
-                bb = RegionOfInterest()
-                xmin = int(boxes[idx][0])
-                ymin = int(boxes[idx][1])
-                xmax = int(boxes[idx][2])
-                ymax = int(boxes[idx][3])
-                bb.x_offset = xmin
-                bb.y_offset = ymin
-                bb.height = ymax - ymin
-                bb.width = xmax - xmin
-                bb.do_rectify = False
-                bboxes.append(bb)
-                # ---
-                # mask
-                # ---
-                mask = masks[idx]
-                
-                label_image[mask > 0] = idx
-                # ---
-                confidences.append(conf[idx])
-                # ---
-                # 
-            mask_image = ros_numpy.msgify(Image, label_image, encoding='16SC1')
-    
+                if results[0].boxes is not None:
+                    bb = RegionOfInterest()
+                    xmin = int(boxes[idx][0])
+                    ymin = int(boxes[idx][1])
+                    xmax = int(boxes[idx][2])
+                    ymax = int(boxes[idx][3])
+                    bb.x_offset = xmin
+                    bb.y_offset = ymin
+                    bb.height = ymax - ymin
+                    bb.width = xmax - xmin
+                    bb.do_rectify = False
+                    bboxes.append(bb)
+
+                    confidences.append(conf[idx])
+
+                if results[0].masks is not None:
+                    mask = masks[idx]
+                    label_image[mask > 0] = idx
+                 
             server_result = GenericImgProcAnnotatorResult()
+
+            if results[0].masks is not None:
+                mask_image = ros_numpy.msgify(Image, label_image, encoding='16SC1')
+                server_result.image = mask_image
+        
+            if results[0].boxes is not None:
+                server_result.bounding_boxes = bboxes
+                server_result.class_confidences = confidences
+    
             server_result.success = True
-            server_result.bounding_boxes = bboxes
             server_result.class_names = class_names
-            server_result.class_confidences = confidences
-            server_result.image = mask_image
+            
         else:
             server_result = GenericImgProcAnnotatorResult()
             server_result.success = False
